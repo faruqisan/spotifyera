@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,10 +28,17 @@ var (
 	))
 	ch = make(chan *spotify.Client)
 	// TODO: handle map of user state currently use 1 time generate
-	state = uuid.New().String()
+	state                 = uuid.New().String()
+	ErrCredentialsMissing = errors.New("missing SPOTIFY_ID and or SPOTIFY_SECRET in your env")
 )
 
 func StartAuthProcess() (*spotify.Client, error) {
+
+	err := checkCredentials()
+	if err != nil {
+		return nil, err
+	}
+
 	// first start an HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", completeAuth)
@@ -62,7 +71,7 @@ func StartAuthProcess() (*spotify.Client, error) {
 	}()
 
 	// shutdown auth server
-	err := server.Shutdown(ctxShutDown)
+	err = server.Shutdown(ctxShutDown)
 	if err != nil && err != http.ErrServerClosed {
 		return nil, err
 	}
@@ -89,4 +98,15 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 
 func GetUser(ctx context.Context, client *spotify.Client) (*spotify.PrivateUser, error) {
 	return client.CurrentUser(ctx)
+}
+
+func checkCredentials() error {
+	spotifyID := os.Getenv("SPOTIFY_ID")
+	spotifySecret := os.Getenv("SPOTIFY_SECRET")
+
+	if spotifyID == "" || spotifySecret == "" {
+		return ErrCredentialsMissing
+	}
+
+	return nil
 }
